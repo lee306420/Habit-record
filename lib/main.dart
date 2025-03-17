@@ -7,11 +7,18 @@ import 'package:share_plus/share_plus.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:fl_chart/fl_chart.dart';
 
 enum ViewType {
   daily,
   weekly,
   monthly,
+}
+
+enum ChartType {
+  bar,
+  line,
+  pie,
 }
 
 enum HabitType {
@@ -200,6 +207,7 @@ class _HabitHistoryPageState extends State<HabitHistoryPage> {
   late DateTime startDate;
   late DateTime endDate;
   ViewType currentView = ViewType.daily;
+  ChartType currentChartType = ChartType.bar;
 
   @override
   void initState() {
@@ -251,6 +259,55 @@ class _HabitHistoryPageState extends State<HabitHistoryPage> {
         title: Text(widget.habit.name),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.bar_chart),
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('选择图表类型'),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ListTile(
+                        leading: const Icon(Icons.bar_chart),
+                        title: const Text('柱状图'),
+                        selected: currentChartType == ChartType.bar,
+                        onTap: () {
+                          setState(() {
+                            currentChartType = ChartType.bar;
+                          });
+                          Navigator.pop(context);
+                        },
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.show_chart),
+                        title: const Text('折线图'),
+                        selected: currentChartType == ChartType.line,
+                        onTap: () {
+                          setState(() {
+                            currentChartType = ChartType.line;
+                          });
+                          Navigator.pop(context);
+                        },
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.pie_chart),
+                        title: const Text('饼图'),
+                        selected: currentChartType == ChartType.pie,
+                        onTap: () {
+                          setState(() {
+                            currentChartType = ChartType.pie;
+                          });
+                          Navigator.pop(context);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.ios_share),
             onPressed: () => _exportHabitData(widget.habit),
@@ -415,74 +472,304 @@ class _HabitHistoryPageState extends State<HabitHistoryPage> {
   // 添加图表构建方法
   Widget _buildChart(Habit habit) {
     final data = _getChartData(habit);
-    return Column(
-      children: [
-        Expanded(
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: data.length,
-            itemBuilder: (context, index) {
-              final item = data[index];
-              final maxValue = data.fold<double>(
-                0,
-                (max, item) => item.value > max ? item.value : max,
-              );
-              final height = maxValue == 0 ? 0 : (item.value / maxValue);
 
-              String valueText;
-              if (habit.type == HabitType.boolean) {
-                // 布尔型习惯显示完成次数
-                valueText = currentView == ViewType.daily
-                    ? (item.value > 0 ? '完成' : '未完成')
-                    : '${item.value.toStringAsFixed(0)}次';
-              } else {
-                // 可量化习惯显示总数值
-                valueText = '${item.value.toStringAsFixed(1)}${habit.unit}';
-              }
+    switch (currentChartType) {
+      case ChartType.bar:
+        return _buildBarChart(data, habit);
+      case ChartType.line:
+        return _buildLineChart(data, habit);
+      case ChartType.pie:
+        return _buildPieChart(data, habit);
+    }
+  }
 
-              return Container(
-                width: currentView == ViewType.daily ? 40 : 60,
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                child: Column(
-                  children: [
-                    Expanded(
-                      child: Container(
-                        width: currentView == ViewType.daily ? 20 : 40,
-                        alignment: Alignment.bottomCenter,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.blue.withOpacity(0.2),
-                            borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(4),
-                            ),
-                          ),
-                          height: height * 150,
-                        ),
+  Widget _buildBarChart(List<_ChartData> data, Habit habit) {
+    return ListView.builder(
+      scrollDirection: Axis.horizontal,
+      itemCount: data.length,
+      itemBuilder: (context, index) {
+        final item = data[index];
+        final maxValue = data.fold<double>(
+          0,
+          (max, item) => item.value > max ? item.value : max,
+        );
+        final height = maxValue == 0 ? 0 : (item.value / maxValue);
+
+        String valueText;
+        if (habit.type == HabitType.boolean) {
+          valueText = currentView == ViewType.daily
+              ? (item.value > 0 ? '完成' : '未完成')
+              : '${item.value.toStringAsFixed(0)}次';
+        } else {
+          valueText = '${item.value.toStringAsFixed(1)}${habit.unit}';
+        }
+
+        return Container(
+          width: currentView == ViewType.daily ? 40 : 60,
+          margin: const EdgeInsets.symmetric(horizontal: 4),
+          child: Column(
+            children: [
+              Expanded(
+                child: Container(
+                  width: currentView == ViewType.daily ? 20 : 40,
+                  alignment: Alignment.bottomCenter,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withOpacity(0.2),
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(4),
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      currentView == ViewType.daily
-                          ? '${item.date.day}日'
-                          : currentView == ViewType.weekly
-                              ? '第${_getWeekNumber(item.date)}周'
-                              : '${item.date.month}月',
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                    Text(
-                      valueText,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.blue,
-                      ),
-                    ),
-                  ],
+                    height: height * 150,
+                  ),
                 ),
-              );
+              ),
+              const SizedBox(height: 4),
+              Text(
+                currentView == ViewType.daily
+                    ? '${item.date.day}日'
+                    : currentView == ViewType.weekly
+                        ? '第${_getWeekNumber(item.date)}周'
+                        : '${item.date.month}月',
+                style: const TextStyle(fontSize: 12),
+              ),
+              Text(
+                valueText,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Colors.blue,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildLineChart(List<_ChartData> data, Habit habit) {
+    if (data.isEmpty) return const Center(child: Text('暂无数据'));
+
+    final spots = data.asMap().entries.map((entry) {
+      return FlSpot(entry.key.toDouble(), entry.value.value);
+    }).toList();
+
+    return LineChart(
+      LineChartData(
+        gridData: const FlGridData(show: true),
+        titlesData: FlTitlesData(
+          leftTitles: const AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 40,
+            ),
+          ),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 30,
+              interval: 1,
+              getTitlesWidget: (value, meta) {
+                if (value.toInt() >= 0 && value.toInt() < data.length) {
+                  final date = data[value.toInt()].date;
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: Text(
+                      currentView == ViewType.daily
+                          ? '${date.day}日'
+                          : currentView == ViewType.weekly
+                              ? '${_getWeekNumber(date)}周'
+                              : '${date.month}月',
+                      style: const TextStyle(fontSize: 10),
+                    ),
+                  );
+                }
+                return const Text('');
+              },
+            ),
+          ),
+          rightTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
+          topTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
+        ),
+        borderData: FlBorderData(show: true),
+        lineBarsData: [
+          LineChartBarData(
+            spots: spots,
+            isCurved: true,
+            color: Colors.blue,
+            barWidth: 3,
+            isStrokeCapRound: true,
+            dotData: const FlDotData(show: true),
+            belowBarData: BarAreaData(
+              show: true,
+              color: Colors.blue.withOpacity(0.2),
+            ),
+          ),
+        ],
+        lineTouchData: LineTouchData(
+          touchTooltipData: LineTouchTooltipData(
+            tooltipBgColor: Colors.blueGrey.withOpacity(0.8),
+            getTooltipItems: (touchedSpots) {
+              return touchedSpots.map((touchedSpot) {
+                final date = data[touchedSpot.x.toInt()].date;
+                final value = touchedSpot.y;
+                String text;
+                if (habit.type == HabitType.boolean) {
+                  text = currentView == ViewType.daily
+                      ? (value > 0 ? '完成' : '未完成')
+                      : '${value.toStringAsFixed(0)}次';
+                } else {
+                  text = '${value.toStringAsFixed(1)}${habit.unit}';
+                }
+                return LineTooltipItem(
+                  '${date.month}/${date.day}\n$text',
+                  const TextStyle(color: Colors.white),
+                );
+              }).toList();
             },
           ),
         ),
-      ],
+      ),
+    );
+  }
+
+  Widget _buildPieChart(List<_ChartData> data, Habit habit) {
+    if (data.isEmpty) return const Center(child: Text('暂无数据'));
+
+    final sections = <PieChartSectionData>[];
+
+    if (habit.type == HabitType.boolean) {
+      int completed = 0;
+      int uncompleted = 0;
+      for (var item in data) {
+        if (item.value > 0) {
+          completed++;
+        } else {
+          uncompleted++;
+        }
+      }
+
+      if (completed > 0) {
+        sections.add(
+          PieChartSectionData(
+            color: Colors.green,
+            value: completed.toDouble(),
+            title: '完成\n$completed次',
+            radius: 80,
+            titleStyle: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+        );
+      }
+
+      if (uncompleted > 0) {
+        sections.add(
+          PieChartSectionData(
+            color: Colors.red,
+            value: uncompleted.toDouble(),
+            title: '未完成\n$uncompleted次',
+            radius: 80,
+            titleStyle: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+        );
+      }
+    } else {
+      final values = data.map((e) => e.value).where((v) => v > 0).toList();
+      if (values.isEmpty) {
+        sections.add(
+          PieChartSectionData(
+            color: Colors.grey,
+            value: 1,
+            title: '暂无数据',
+            radius: 80,
+            titleStyle: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+        );
+      } else {
+        values.sort();
+        final min = values.first;
+        final max = values.last;
+        final range = max - min;
+        final sectionCount = 4; // 将数据分为4个区间
+
+        if (range > 0) {
+          final sectionsData = List.generate(sectionCount, (i) {
+            final start = min + (range / sectionCount * i);
+            final end = min + (range / sectionCount * (i + 1));
+            final count = values.where((v) => v >= start && v < end).length;
+            return {
+              'start': start,
+              'end': end,
+              'count': count,
+            };
+          });
+
+          final colors = [
+            Colors.blue,
+            Colors.green,
+            Colors.orange,
+            Colors.purple,
+          ];
+
+          sections.addAll(
+            sectionsData.asMap().entries.map(
+              (entry) {
+                final i = entry.key;
+                final section = entry.value;
+                return PieChartSectionData(
+                  color: colors[i],
+                  value: section['count']!.toDouble(),
+                  title:
+                      '${section['start']!.toStringAsFixed(1)}-${section['end']!.toStringAsFixed(1)}${habit.unit}\n${section['count']}次',
+                  radius: 80,
+                  titleStyle: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                );
+              },
+            ),
+          );
+        } else {
+          sections.add(
+            PieChartSectionData(
+              color: Colors.blue,
+              value: values.length.toDouble(),
+              title: '${values.first}${habit.unit}\n${values.length}次',
+              radius: 80,
+              titleStyle: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          );
+        }
+      }
+    }
+
+    return PieChart(
+      PieChartData(
+        sections: sections,
+        centerSpaceRadius: 0,
+        sectionsSpace: 2,
+      ),
     );
   }
 
