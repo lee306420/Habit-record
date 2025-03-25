@@ -1,16 +1,28 @@
-# Habit-record
+这是一个名为"我的习惯记录应用"的Flutter项目，是一个用于记录和跟踪个人习惯的移动应用。
 
-A new Flutter project.
+主要功能：
+1. 支持两种习惯类型：
+   - 布尔型（完成/未完成）
+   - 可量化型（带有数值和单位）
 
-## Getting Started
+2. 数据可视化功能：
+   - 提供多种图表类型：柱状图、折线图、饼图
+   - 多种时间视图：日视图、周视图、月视图
 
-This project is a starting point for a Flutter application.
+3. 数据管理：
+   - 支持导出习惯记录数据到JSON文件
+   - 支持导入之前备份的数据
+   - 可设置自定义存储路径
 
-A few resources to get you started if this is your first Flutter project:
+4. 数据分析：
+   - 计算习惯完成率
+   - 显示统计信息（总数、平均值等）
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+5. 跨平台支持：
+   - 适配Android、iOS、Web、Linux、Windows和macOS
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+6. 文件功能：
+   - 数据备份与恢复
+   - 文件分享
+
+这个应用采用单一文件结构（所有代码都在main.dart中），使用了共享偏好（SharedPreferences）进行简单数据存储，使用了fl_chart库进行数据可视化，还实现了文件操作和权限管理功能。
