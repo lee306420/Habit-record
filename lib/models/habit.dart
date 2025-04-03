@@ -7,6 +7,7 @@ class Habit {
   double value;
   String unit;
   Map<DateTime, dynamic> history;
+  int order;
 
   Habit({
     required this.name,
@@ -15,6 +16,7 @@ class Habit {
     this.value = 0,
     this.unit = '',
     Map<DateTime, dynamic>? history,
+    this.order = 0,
   }) : history = history ?? {};
 
   Map<String, dynamic> toJson() {
@@ -27,6 +29,7 @@ class Habit {
       'history': history.map(
         (key, value) => MapEntry(key.toIso8601String(), value),
       ),
+      'order': order,
     };
   }
 
@@ -37,6 +40,7 @@ class Habit {
       completed: json['completed'],
       value: (json['value'] ?? 0).toDouble(),
       unit: json['unit'],
+      order: json['order'] ?? 0,
       history: (json['history'] as Map<String, dynamic>).map(
         (key, value) => MapEntry(
           DateTime.parse(key),

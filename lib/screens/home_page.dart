@@ -7,6 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:flutter/scheduler.dart';
 import '../models/habit.dart';
 import '../utils/enums.dart';
 import 'habit_history_page.dart';
@@ -22,12 +23,15 @@ class _MyHomePageState extends State<MyHomePage> {
   List<Habit> habits = [];
   final String _storageKey = 'habits';
   String? _customStoragePath;
+  String _customTipText = '提示：左滑卡片进行编辑，长按并拖动可调整顺序';
+  final String _tipTextKey = 'custom_tip_text';
 
   @override
   void initState() {
     super.initState();
     _checkAndRequestPermissions();
     _loadCustomStoragePath().then((_) => _loadHabits());
+    _loadCustomTipText();
   }
 
   Future<void> _checkAndRequestPermissions() async {
@@ -102,6 +106,9 @@ class _MyHomePageState extends State<MyHomePage> {
             habits = habitsList
                 .map((json) => Habit.fromJson(json as Map<String, dynamic>))
                 .toList();
+
+            // 按照order字段排序习惯列表
+            habits.sort((a, b) => a.order.compareTo(b.order));
           });
         }
       }
@@ -202,13 +209,9 @@ class _MyHomePageState extends State<MyHomePage> {
                             selectedType = value!;
                           });
                         },
-                        activeColor: Theme.of(context).colorScheme.primary,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
                       ),
                       RadioListTile<HabitType>(
-                        title: const Text('可量化的'),
+                        title: const Text('可量化'),
                         subtitle: const Text('记录具体的数值'),
                         value: HabitType.quantifiable,
                         groupValue: selectedType,
@@ -217,35 +220,30 @@ class _MyHomePageState extends State<MyHomePage> {
                             selectedType = value!;
                           });
                         },
-                        activeColor: Theme.of(context).colorScheme.primary,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
                       ),
                     ],
                   ),
                 ),
-                if (selectedType == HabitType.quantifiable)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 16),
-                    child: TextField(
-                      controller: unitController,
-                      decoration: InputDecoration(
-                        labelText: '单位',
-                        hintText: '例如：次、分钟、公里',
-                        filled: true,
-                        fillColor: Theme.of(context)
-                            .colorScheme
-                            .surfaceVariant
-                            .withOpacity(0.3),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide.none,
-                        ),
-                        prefixIcon: const Icon(Icons.straighten),
+                if (selectedType == HabitType.quantifiable) ...[
+                  const SizedBox(height: 24),
+                  TextField(
+                    controller: unitController,
+                    decoration: InputDecoration(
+                      labelText: '单位',
+                      hintText: '例如：分钟、公里、页等',
+                      filled: true,
+                      fillColor: Theme.of(context)
+                          .colorScheme
+                          .surfaceVariant
+                          .withOpacity(0.3),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide.none,
                       ),
+                      prefixIcon: const Icon(Icons.scale),
                     ),
                   ),
+                ],
               ],
             ),
           ),
@@ -258,13 +256,16 @@ class _MyHomePageState extends State<MyHomePage> {
               onPressed: () {
                 if (nameController.text.isNotEmpty) {
                   setState(() {
-                    habits.add(
-                      Habit(
-                        name: nameController.text,
-                        type: selectedType,
-                        unit: unitController.text,
-                      ),
+                    // 设置新习惯的order为当前列表长度，确保它被添加到末尾
+                    final newHabit = Habit(
+                      name: nameController.text,
+                      type: selectedType,
+                      unit: selectedType == HabitType.quantifiable
+                          ? unitController.text
+                          : '',
+                      order: habits.length, // 添加此行，将新习惯的顺序设置为列表末尾
                     );
+                    habits.add(newHabit);
                   });
                   _saveHabits();
                   Navigator.pop(context);
@@ -272,11 +273,6 @@ class _MyHomePageState extends State<MyHomePage> {
               },
               icon: const Icon(Icons.add),
               label: const Text('添加'),
-              style: FilledButton.styleFrom(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
             ),
           ],
         ),
@@ -454,19 +450,89 @@ class _MyHomePageState extends State<MyHomePage> {
         ),
         child: habits.isEmpty
             ? _buildEmptyState(context)
-            : AnimatedList(
-                initialItemCount: habits.length,
-                key: GlobalKey<AnimatedListState>(),
-                itemBuilder: (context, index, animation) {
-                  final habit = habits[index];
-                  return SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(1, 0),
-                      end: Offset.zero,
-                    ).animate(animation),
-                    child: _buildHabitItem(habit),
-                  );
-                },
+            : Column(
+                children: [
+                  // 添加可编辑的提示框
+                  if (habits.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .secondaryContainer
+                              .withOpacity(0.7),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .secondary
+                                .withOpacity(0.2),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.info_outline,
+                              color: Theme.of(context).colorScheme.secondary,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _customTipText,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color:
+                                      Theme.of(context).colorScheme.secondary,
+                                ),
+                              ),
+                            ),
+                            // 添加编辑按钮
+                            IconButton(
+                              icon: Icon(
+                                Icons.edit,
+                                size: 16,
+                                color: Theme.of(context).colorScheme.secondary,
+                              ),
+                              onPressed: _showEditTipTextDialog,
+                              constraints: const BoxConstraints(),
+                              padding: const EdgeInsets.all(4),
+                              tooltip: '编辑提示内容',
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  // 习惯列表
+                  Expanded(
+                    child: ReorderableListView.builder(
+                      itemCount: habits.length,
+                      onReorder: (oldIndex, newIndex) {
+                        setState(() {
+                          if (oldIndex < newIndex) {
+                            newIndex -= 1;
+                          }
+                          final Habit item = habits.removeAt(oldIndex);
+                          habits.insert(newIndex, item);
+
+                          // 更新习惯顺序并保存
+                          _updateHabitsOrder();
+                        });
+                      },
+                      itemBuilder: (context, index) {
+                        final habit = habits[index];
+                        return _buildHabitItem(habit,
+                            key: ValueKey(habit.name + index.toString()));
+                      },
+                      padding: const EdgeInsets.only(top: 8, bottom: 80),
+                    ),
+                  ),
+                ],
               ),
       ),
       floatingActionButton: FloatingActionButton(
@@ -520,7 +586,7 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
-  Widget _buildHabitItem(Habit habit) {
+  Widget _buildHabitItem(Habit habit, {required Key key}) {
     final theme = Theme.of(context);
 
     // 确保显示正确的完成状态
@@ -535,60 +601,119 @@ class _MyHomePageState extends State<MyHomePage> {
         : habit.history.containsKey(today) &&
             (habit.history[today] as double) > 0;
 
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: isCompleted
-          ? theme.colorScheme.primaryContainer.withOpacity(0.3)
-          : theme.cardTheme.color,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => _showHabitHistory(habit),
-        onLongPress: () => _showEditMenu(habit),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: ListTile(
-            title: Text(
-              habit.name,
+    return Dismissible(
+      key: key,
+      direction: DismissDirection.endToStart, // 只允许从右向左滑动
+      confirmDismiss: (direction) async {
+        // 显示编辑菜单而不是真正删除
+        _showEditMenu(habit);
+        // 返回false表示不真正删除这个item
+        return false;
+      },
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.primary,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.edit,
+              color: Colors.white,
+              size: 28,
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              '编辑',
               style: TextStyle(
+                color: Colors.white,
                 fontWeight: FontWeight.bold,
-                fontSize: 18,
-                color: theme.colorScheme.onSurface,
+                fontSize: 12,
               ),
             ),
-            subtitle: Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                habit.type == HabitType.boolean
-                    ? (habit.completed ? '今日已完成' : '今日未完成')
-                    : '今日进度：${habit.history.containsKey(today) ? (habit.history[today] as double).toStringAsFixed(1) : '0.0'}${habit.unit}',
+          ],
+        ),
+      ),
+      child: Card(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        color: isCompleted
+            ? theme.colorScheme.primaryContainer.withOpacity(0.3)
+            : theme.cardTheme.color,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => _showHabitHistory(habit),
+          // 删除onLongPress，因为ReorderableListView已经处理了长按拖动排序
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: ListTile(
+              title: Text(
+                habit.name,
                 style: TextStyle(
-                  color: isCompleted
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.onSurface.withOpacity(0.6),
-                ),
-              ),
-            ),
-            leading: CircleAvatar(
-              backgroundColor: isCompleted
-                  ? theme.colorScheme.primary
-                  : theme.colorScheme.primary.withOpacity(0.6),
-              radius: 24,
-              child: Text(
-                habit.name.isNotEmpty ? habit.name[0] : '?',
-                style: TextStyle(
-                  color: theme.colorScheme.onPrimary,
                   fontWeight: FontWeight.bold,
-                  fontSize: 20,
+                  fontSize: 18,
+                  color: theme.colorScheme.onSurface,
                 ),
               ),
-            ),
-            trailing: IconButton(
-              icon: Icon(
-                Icons.arrow_forward_ios,
-                size: 18,
-                color: theme.colorScheme.primary.withOpacity(0.7),
+              subtitle: Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  habit.type == HabitType.boolean
+                      ? (habit.completed ? '今日已完成' : '今日未完成')
+                      : '今日进度：${habit.history.containsKey(today) ? (habit.history[today] as double).toStringAsFixed(1) : '0.0'}${habit.unit}',
+                  style: TextStyle(
+                    color: isCompleted
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.onSurface.withOpacity(0.6),
+                  ),
+                ),
               ),
-              onPressed: () => _showHabitHistory(habit),
+              leading: Stack(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: isCompleted
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.primary.withOpacity(0.6),
+                    radius: 24,
+                    child: Text(
+                      habit.name.isNotEmpty ? habit.name[0] : '?',
+                      style: TextStyle(
+                        color: theme.colorScheme.onPrimary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 20,
+                      ),
+                    ),
+                  ),
+                  // 添加一个提示拖拽的小图标
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.background,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        Icons.drag_indicator,
+                        size: 12,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              trailing: IconButton(
+                icon: Icon(
+                  Icons.arrow_forward_ios,
+                  size: 18,
+                  color: theme.colorScheme.primary.withOpacity(0.7),
+                ),
+                onPressed: () => _showHabitHistory(habit),
+              ),
             ),
           ),
         ),
@@ -750,6 +875,30 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
             ),
             const Divider(),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.info_outline,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              title: const Text('编辑提示内容'),
+              subtitle: Text(
+                _customTipText,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _showEditTipTextDialog();
+              },
+            ),
             ListTile(
               leading: Container(
                 padding: const EdgeInsets.all(8),
@@ -1064,5 +1213,71 @@ class _MyHomePageState extends State<MyHomePage> {
         );
       }
     }
+  }
+
+  // 更新习惯的排序
+  void _updateHabitsOrder() {
+    // 重新设置所有习惯的order字段
+    for (int i = 0; i < habits.length; i++) {
+      habits[i].order = i;
+    }
+    // 保存更新后的习惯列表
+    _saveHabits();
+  }
+
+  Future<void> _loadCustomTipText() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _customTipText = prefs.getString(_tipTextKey) ?? '提示：左滑卡片进行编辑，长按并拖动可调整顺序';
+    });
+  }
+
+  Future<void> _saveCustomTipText(String text) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_tipTextKey, text);
+    setState(() {
+      _customTipText = text;
+    });
+  }
+
+  Future<void> _showEditTipTextDialog() async {
+    final textController = TextEditingController(text: _customTipText);
+
+    return showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('编辑提示内容'),
+        content: TextField(
+          controller: textController,
+          decoration: InputDecoration(
+            labelText: '提示内容',
+            hintText: '输入要显示的提示内容',
+            filled: true,
+            fillColor: Colors.grey[50],
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            prefixIcon: const Icon(Icons.edit),
+          ),
+          maxLines: 2,
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (textController.text.isNotEmpty) {
+                _saveCustomTipText(textController.text);
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
   }
 }
